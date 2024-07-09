@@ -179,13 +179,14 @@ for episode in range(1000):
             
             critic_optimizer_1.zero_grad()
             critic_optimizer_2.zero_grad()
-            critic_loss_1.backward() # computes the gradient for the critics
+            critic_loss_1.backward() # computes the gradient for the critics and applys the gradients through back propagation effectively updating our critic networks
             critic_loss_2.backward()
             critic_optimizer_1.step()
             critic_optimizer_2.step()
             
             # Delayed policy updates
             if step % policy_freq == 0:
+                # we update the actor network less frequently in order to encourage exploration 
                 actor_loss = -critic_1(states, actor(states)).mean()
                 actor_optimizer.zero_grad()
                 actor_loss.backward()
