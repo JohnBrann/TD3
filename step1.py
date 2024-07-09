@@ -2,6 +2,18 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+'''
+    The structure of an Actor Critic agent class is fairly similar between different algorithms.
+    Each requires a definition of an Actor Class and Critic class that are derived from the nn.Module class
+
+    The nn.Module class requires descendant classes to implement a constructor that calls the parent constructor as well as
+    a method called forward that differes between the actor and critic
+
+    Actor forward() - returns an action calculated based on the provided state using the rectifier activation function
+
+    Critic forward() - 
+'''
+
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
