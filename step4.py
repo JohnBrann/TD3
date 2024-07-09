@@ -9,6 +9,14 @@ import argparse
 from collections import deque
 
 
+'''
+This file differs from step3 in a few ways
+
+* Imports the hyperparameters from the provided hyperparameters.yml file, cutting down on variable declarations. 
+* Implements the agent class which utilizes the run() function to create the nn required for training and runs the training loop
+* Begins the process of including command line arguments to change whether we are training/testing
+'''
+
 # Check if GPU is available and set the device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -50,10 +58,6 @@ class Critic(nn.Module):
         self.layer1 = nn.Linear(state_dim + action_dim, 256)
         self.layer2 = nn.Linear(256, 256)
         self.layer3 = nn.Linear(256, 1)
-
-    # def backward(self, state, action):
-    #     print("hello there....")
-    #     return 400
 
     def forward(self, state, action):
         x = torch.relu(self.layer1(torch.cat([state, action], 1)))
