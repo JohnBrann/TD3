@@ -1,0 +1,17 @@
+mountaincar1:
+  env_id: MountainCarContinuous-v0
+  replay_buffer_size: 100000
+  gamma: 0.99 
+  tau: 0.005
+  policy_noise: 0.2
+  noise_clip: 0.5
+  policy_freq: 2
+
+pendulum1:
+  env_id: Pendulum-v1
+  replay_buffer_size: 100000
+  gamma: 0.99 
+  tau: 0.005
+  policy_noise: 0.2
+  noise_clip: 0.5
+  policy_freq: 2
