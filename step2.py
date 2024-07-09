@@ -3,6 +3,18 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+
+'''
+This file iterates upon the step1 file in a few ways.
+
+Firstly, the file implements the gym enviornment in order to get actual state information.
+Secondly, we are able to retreive legitimate values associated with the env for state_dim, action_dim, max_action
+Thridly, we link the actor and critic networks to the GPU if available
+Lastly, we get the state from the enviornment, give the state to the actor, and then give the enviornment the newly found action to step forward with. 
+
+Notes:
+* this example only has one state (the starting state)
+'''
 # Check if GPU is available and set the device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

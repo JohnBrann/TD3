@@ -7,11 +7,14 @@ import torch.optim as optim
     Each requires a definition of an Actor Class and Critic class that are derived from the nn.Module class
 
     The nn.Module class requires descendant classes to implement a constructor that calls the parent constructor as well as
-    a method called forward that differes between the actor and critic
+    a method called forward that differs between the actor and critic
 
     Actor forward() - returns an action calculated based on the provided state using the rectifier activation function
 
-    Critic forward() - 
+    Critic forward() - returns a q_value calculated with the state and action provided by the actor, which is then ran through the same rectifier activation function
+
+    Notes: 
+    * in this example, the state_dimension, action_dimension, and max_action are arbitrary values
 '''
 
 class Actor(nn.Module):
