@@ -6,7 +6,14 @@ import torch.optim as optim
 import random
 from collections import deque
 
-
+'''
+This file provides a great number of changes from step 2 including
+* Providing a replay memory class to handle the batches of steps used by the actor and critic for their calculations (action and qvalue respectively)
+* Creates not only the required Actor and 2 critic objects, but actor_target and critic_target objects as well which are used as the inbetween for the 
+actor to the critic and the critic to the actor
+* introduces hyperparameter values but doesn't import them from a file. The parameters are provded within the file itself as of now.
+* implementing the training loop which in our example (td3) uses the dual-critic network, batches of steps, and delayed policy updates to further train the model
+'''
 # TD3
 # Some key characteristsics of TD3
 # two Q-Learning functions
@@ -123,19 +130,19 @@ for episode in range(1000):
     episode_reward = 0
     # Maximum of 200 step in an episode
     for step in range(200):
-        state_tensor = np.array([state], dtype=np.float32)
-        state_tensor = torch.tensor(state).to(device) 
+        state_tensor = np.array([state], dtype=np.float32) # convert list to np array
+        state_tensor = torch.tensor(state).to(device)  # convert np array to tensor
 
         # Select action
-        action = actor(state_tensor).detach().cpu().numpy()[0]
-        action = np.clip(action + np.random.normal(0, max_action * 0.1, size=action_dim), -max_action, max_action)
+        action = actor(state_tensor).detach().cpu().numpy()[0] # detach removes optimization graph from the object, improving speed for the calculation
+        action = np.clip(action + np.random.normal(0, max_action * 0.1, size=action_dim), -max_action, max_action) # force the action to be in range 
         
         # Interact with the environment
         next_state, reward, done, _, _ = env.step(action)
         episode_reward += reward
-        replay_buffer.append((state, action, reward, next_state, done))
+        replay_buffer.append((state, action, reward, next_state, done)) # add step to replay_buffer
         
-        # Sample from replay buffer
+        # Sample from replay buffer if replay buffer proper size
         if len(replay_buffer) > 1000:
             minibatch = replay_buffer.sample(100)
             states, actions, rewards, next_states, dones = zip(*minibatch)
@@ -162,7 +169,7 @@ for episode in range(1000):
             # Compute target Q-values
             target_Q1 = critic_target_1(next_states, next_actions)
             target_Q2 = critic_target_2(next_states, next_actions)
-            target_Q = rewards + gamma * (1 - dones) * torch.min(target_Q1, target_Q2).detach()
+            target_Q = rewards + gamma * (1 - dones) * torch.min(target_Q1, target_Q2).detach() # calculate final q value using critic 1 and critic 2's minimum
             
             # Update critic networks
             current_Q1 = critic_1(states, actions)
@@ -172,7 +179,7 @@ for episode in range(1000):
             
             critic_optimizer_1.zero_grad()
             critic_optimizer_2.zero_grad()
-            critic_loss_1.backward()
+            critic_loss_1.backward() # computes the gradient for the critics
             critic_loss_2.backward()
             critic_optimizer_1.step()
             critic_optimizer_2.step()
