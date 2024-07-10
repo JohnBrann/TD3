@@ -46,11 +46,11 @@ class ReplayMemory():
 
 # Actor NN
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action):
+    def __init__(self, state_dim, action_dim, max_action, hidden_dim=256):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(state_dim, 256)
-        self.layer2 = nn.Linear(256, 256)
-        self.layer3 = nn.Linear(256, action_dim)
+        self.layer1 = nn.Linear(state_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        self.layer3 = nn.Linear(hidden_dim, action_dim)
         self.max_action = max_action
 
     def forward(self, state):
@@ -61,11 +61,11 @@ class Actor(nn.Module):
 
 # Critic NN
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, hidden_dim=246):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(state_dim + action_dim, 256)
-        self.layer2 = nn.Linear(256, 256)
-        self.layer3 = nn.Linear(256, 1)
+        self.layer1 = nn.Linear(state_dim + action_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        self.layer3 = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, state, action):
         x = torch.relu(self.layer1(torch.cat([state, action], 1)))
@@ -91,6 +91,8 @@ class Agent():
         self.learning_rate = hyperparameters['learning_rate']
         self.stop_on_reward = hyperparameters['stop_on_reward']
         self.mini_batch_size = hyperparameters['mini_batch_size']
+        self.episode_start_reward = hyperparameters['episode_start_reward']
+        self.env_make_params = hyperparameters.get('env_make_params', {})
 
         self.LOG_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.log')
         self.MODEL_FILE = os.path.join(RUNS_DIR, f'{self.hyperparameter_set}.pt')
@@ -102,7 +104,7 @@ class Agent():
         self.replay_buffer = ReplayMemory(maxlen=self.replay_buffer_size)
 
         # Initialize the environment
-        self.env = gym.make(self.env_id, render_mode='human' if not is_training else None)
+        self.env = gym.make(self.env_id, render_mode='human' if not is_training else None, **self.env_make_params)
 
         # Get state and action dimensions from the environment
         self.state_dim = self.env.observation_space.shape[0]
@@ -111,6 +113,7 @@ class Agent():
         self.rewards_per_episode = []
         self.epsilon_history = []
         self.best_reward = -9999999
+        self.max_steps = self.env.spec.max_episode_steps  # Dynamically get the truncation value
 
         # Initialize Actor Networks (Actor and Actor Target)
         self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
@@ -135,7 +138,7 @@ class Agent():
             self.actor.load_state_dict(torch.load(self.MODEL_FILE))
             self.actor.eval()
 
-    def run(self, is_training=True, render=False):
+    def run(self, is_training):
         if is_training:
             start_time = datetime.now()
             last_graph_update_time = start_time
@@ -146,35 +149,37 @@ class Agent():
 
         for episode in itertools.count():
             state = self.env.reset()[0]
-            episode_reward = -1.0
+            episode_reward = self.episode_start_reward
             terminated = False
+            truncated = False
             step_count = 0
-            for step in range(10):
-                # state_tensor = np.array([state], dtype=np.float32)
-                # state_tensor = torch.tensor(state).to(device)
 
-                state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-                # If the reward is not a result that we want we continue training
-                while not terminated and episode_reward > self.stop_on_reward:
-                    # Select action
-                    action = self.actor(state_tensor).detach().cpu().numpy()[0]
-                    action = np.clip(action + np.random.normal(0, self.max_action * 0.1, size=self.action_dim), -self.max_action, self.max_action)
-                    
-                    # Interact with the environment
-                    next_state, reward, terminated, _, _ = self.env.step(action)
-                    episode_reward += reward
-                    if is_training:
-                        self.replay_buffer.append((state, action, reward, next_state, terminated))
-                        step_count += 1
-                    state_tensor = next_state
-                    state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)  # Update the tensor for the new state
 
-                self.rewards_per_episode.append(episode_reward)
+            state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+            # If the reward is not a result that we want we continue training
+            while not terminated and not truncated:
+            #and episode_reward > self.stop_on_reward and step_count < self.max_steps:
+                # print(step_count)
+                # Select action
+                action = self.actor(state_tensor).detach().cpu().numpy()[0]
+                action = np.clip(action + np.random.normal(0, self.max_action * 0.1, size=self.action_dim), -self.max_action, self.max_action)
+                
+                # Interact with the environment
+                next_state, reward, terminated, truncated, _ = self.env.step(action)
+                episode_reward += reward
+                if is_training:
+                    self.replay_buffer.append((state, action, reward, next_state, terminated))
+                    step_count += 1
+                    #print(step_count)
+                state_tensor = next_state
+                state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)  # Update the tensor for the new state
+                
+            self.rewards_per_episode.append(episode_reward)
 
             if is_training:
                 # save the model everytime we get a new highest reward
-                if episode_reward < self.best_reward:
-                    log_message = f"{datetime.now().strftime(DATE_FORMAT)}: New best reward {episode_reward:0.1f} ({(episode_reward-self.best_reward)/self.best_reward*100:+.1f}%) at episode {episode}, saving model..."
+                if episode_reward > self.best_reward:
+                    log_message = f"{datetime.now().strftime(DATE_FORMAT)}: New best reward {episode_reward:0.2f} ({(episode_reward-self.best_reward)/self.best_reward*100:+.1f}%) at episode {episode}, saving model..."
                     print(log_message)
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')
@@ -187,11 +192,11 @@ class Agent():
                     last_graph_update_time = current_time
                     
                 if len(self.replay_buffer) > self.mini_batch_size:
-                    self.optimize(step)
+                    self.optimize(step_count)
             
         print(f"Episode {episode + 1}, Reward: {episode_reward}")
     
-    def optimize(self, step):
+    def optimize(self, step_count):
         # Sample from replay buffer and train
         # Check if is training and replay buffer contains more then n samples
         if self.is_training and len(self.replay_buffer) > 1000:
@@ -234,7 +239,7 @@ class Agent():
             self.critic_optimizer_2.step()
             
             # Actor NN is updated based on the policy_freq the actor network is updated
-            if step % self.policy_freq == 0:
+            if step_count % self.policy_freq == 0:
                 #  The loss for the actor network is the negative mean Q-value, the MSE
                 #  The difference between predicted and the actual 
                 actor_loss = -self.critic_1(states, self.actor(states)).mean()
@@ -243,7 +248,6 @@ class Agent():
                 self.actor_optimizer.step()
                 
                 # the target networks are then softly updated
-                # 
                 for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                     target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
                 
@@ -266,10 +270,11 @@ class Agent():
         plt.subplot(2, 1, 1)
         plt.plot(rewards_per_episode)
         plt.title('Rewards per Episode')
-        plt.subplot(2, 1, 2)
-        plt.plot(epsilon_history)
-        plt.title('Epsilon History')
+        # plt.subplot(2, 1, 2)
+        # plt.plot(epsilon_history)
+        # plt.title('Epsilon History')
         plt.savefig(self.GRAPH_FILE)
+        plt.close
 
 
 
@@ -281,5 +286,5 @@ if __name__ == '__main__':
     
     # Initialize agent with specified hyperparameters
     td3 = Agent(hyperparameter_set=args.hyperparameters, is_training=args.train)
-    td3.run()
+    td3.run(is_training=args.train)
 
