@@ -49,13 +49,13 @@ class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action, hidden_dim=256):
         super(Actor, self).__init__()
         self.layer1 = nn.Linear(state_dim, hidden_dim)
-        #self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, action_dim)
         self.max_action = max_action
 
     def forward(self, state):
         x = torch.relu(self.layer1(state))
-        #x = torch.relu(self.layer2(x))
+        x = torch.relu(self.layer2(x))
         action = self.max_action * torch.tanh(self.layer3(x))  # Ensure the action is in the correct range 
         return action
 
@@ -64,12 +64,12 @@ class Critic(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=256):
         super(Critic, self).__init__()
         self.layer1 = nn.Linear(state_dim + action_dim, hidden_dim)
-        #self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, state, action):
         x = torch.relu(self.layer1(torch.cat([state, action], 1)))
-        #x = torch.relu(self.layer2(x))
+        x = torch.relu(self.layer2(x))
         q_value = self.layer3(x)
         return q_value
 
@@ -115,10 +115,11 @@ class Agent():
         self.best_reward = -9999999
         self.max_steps = self.env.spec.max_episode_steps  # Dynamically get the truncation value
 
-        # Initialize Actor Networks (Actor and Actor Target)
+        # Initialize Actor Network
         self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
 
         if is_training:
+            # Initialize Actor Target Networks
             self.actor_target = Actor(self.state_dim, self.action_dim, self.max_action).to(device)
             self.actor_target.load_state_dict(self.actor.state_dict())
 
@@ -129,9 +130,6 @@ class Agent():
             self.critic_2 = Critic(self.state_dim, self.action_dim).to(device)
             self.critic_target_2 = Critic(self.state_dim, self.action_dim).to(device)
             self.critic_target_2.load_state_dict(self.critic_2.state_dict())
-        # else:
-        #     self.actor.load_state_dict(torch.load(self.MODEL_FILE))
-        #     self.actor.eval()
 
     def run(self, is_training):
         if is_training:
@@ -156,12 +154,9 @@ class Agent():
             truncated = False
             step_count = 0
 
-
             state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
             # If the reward is not a result that we want we continue training
             while not terminated and not truncated:
-            #and episode_reward > self.stop_on_reward and step_count < self.max_steps:
-                # print(step_count)
                 # Select action
                 with torch.no_grad():
                     action = self.actor(state_tensor).detach().cpu().numpy()[0]
@@ -173,7 +168,6 @@ class Agent():
                 if is_training:
                     self.replay_buffer.append((state, action, reward, next_state, terminated, truncated))
                     step_count += 1
-                    #print(step_count)
                 state = next_state
                 state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)  # Update the tensor for the new state
                 
