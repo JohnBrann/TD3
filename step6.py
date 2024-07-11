@@ -256,26 +256,13 @@ class Agent():
                 for param, target_param in zip(self.critic_2.parameters(), self.critic_target_2.parameters()):
                     target_param.data.copy_(self.tau * param.data + (1 - self.tau) *  target_param.data)
 
-
-    def save_model(self, actor, critic_1, critic_2):
-        torch.save({
-            'actor': actor.state_dict(),
-            'critic_1': critic_1.state_dict(),
-            'critic_2': critic_2.state_dict()
-        }, self.MODEL_FILE)
-
     def save_graph(self, rewards_per_episode, epsilon_history):
         plt.figure()
         plt.subplot(2, 1, 1)
         plt.plot(rewards_per_episode)
         plt.title('Rewards per Episode')
-        # plt.subplot(2, 1, 2)
-        # plt.plot(epsilon_history)
-        # plt.title('Epsilon History')
         plt.savefig(self.GRAPH_FILE)
         plt.close('all')
-
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train or test model.')
