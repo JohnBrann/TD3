@@ -129,14 +129,9 @@ class Agent():
             self.critic_2 = Critic(self.state_dim, self.action_dim).to(device)
             self.critic_target_2 = Critic(self.state_dim, self.action_dim).to(device)
             self.critic_target_2.load_state_dict(self.critic_2.state_dict())
-
-            # Optimizers
-            self.actor_optimizer = optim.Adam(self.actor.parameters(), self.learning_rate)
-            self.critic_optimizer_1 = optim.Adam(self.critic_1.parameters(), self.learning_rate)
-            self.critic_optimizer_2 = optim.Adam(self.critic_2.parameters(), self.learning_rate)
-        else:
-            self.actor.load_state_dict(torch.load(self.MODEL_FILE))
-            self.actor.eval()
+        # else:
+        #     self.actor.load_state_dict(torch.load(self.MODEL_FILE))
+        #     self.actor.eval()
 
     def run(self, is_training):
         if is_training:
@@ -146,6 +141,13 @@ class Agent():
             print(log_message)
             with open(self.LOG_FILE, 'w') as file:
                 file.write(log_message + '\n')
+
+            self.actor_optimizer = optim.Adam(self.actor.parameters(), self.learning_rate)
+            self.critic_optimizer_1 = optim.Adam(self.critic_1.parameters(), self.learning_rate)
+            self.critic_optimizer_2 = optim.Adam(self.critic_2.parameters(), self.learning_rate)
+        else:
+            self.actor.load_state_dict(torch.load(self.MODEL_FILE))
+            self.actor.eval()
 
         for episode in itertools.count():
             state = self.env.reset()[0]
@@ -161,17 +163,18 @@ class Agent():
             #and episode_reward > self.stop_on_reward and step_count < self.max_steps:
                 # print(step_count)
                 # Select action
-                action = self.actor(state_tensor).detach().cpu().numpy()[0]
+                with torch.no_grad():
+                    action = self.actor(state_tensor).detach().cpu().numpy()[0]
                 action = np.clip(action + np.random.normal(0, self.max_action * 0.1, size=self.action_dim), -self.max_action, self.max_action)
-                
+
                 # Interact with the environment
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 episode_reward += reward
                 if is_training:
-                    self.replay_buffer.append((state, action, reward, next_state, terminated))
+                    self.replay_buffer.append((state, action, reward, next_state, terminated, truncated))
                     step_count += 1
                     #print(step_count)
-                state_tensor = next_state
+                state = next_state
                 state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)  # Update the tensor for the new state
                 
             self.rewards_per_episode.append(episode_reward)
@@ -202,19 +205,21 @@ class Agent():
         if self.is_training and len(self.replay_buffer) > 1000:
             # Takes minibatch of 100 episodes from the experience replay
             minibatch = self.replay_buffer.sample(self.mini_batch_size)
-            states, actions, rewards, next_states, dones = zip(*minibatch)
+            states, actions, rewards, next_states, dones, truncs = zip(*minibatch)
             
             states = np.array(states, dtype=np.float32)
             actions = np.array(actions, dtype=np.float32)
             rewards = np.array(rewards, dtype=np.float32)
             next_states = np.array(next_states, dtype=np.float32)
             dones = np.array(dones, dtype=np.float32)
+            truncs = np.array(truncs, dtype=np.float32)
             
             states = torch.tensor(states).to(device)
             actions = torch.tensor(actions).to(device)
             rewards = torch.tensor(rewards).unsqueeze(1).to(device)
             next_states = torch.tensor(next_states).to(device)
             dones = torch.tensor(dones).unsqueeze(1).to(device)
+            truncs = torch.tensor(truncs).unsqueeze(1).to(device)
             
             # Adding noise, similar to in DQN of selecting random action 
             noise = torch.clamp(torch.randn_like(actions) * self.policy_noise, -self.noise_clip, self.noise_clip)
@@ -255,7 +260,7 @@ class Agent():
                     target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
                 
                 for param, target_param in zip(self.critic_2.parameters(), self.critic_target_2.parameters()):
-                    target_param.data.copy_(self.tau * param.data + (1 - self.tau))
+                    target_param.data.copy_(self.tau * param.data + (1 - self.tau) *  target_param.data)
 
 
     def save_model(self, actor, critic_1, critic_2):
