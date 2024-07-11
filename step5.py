@@ -23,7 +23,6 @@ os.makedirs(RUNS_DIR, exist_ok=True)
 # 'Agg': used to generate plots as images and save them to a file instead of rendering to screen
 matplotlib.use('Agg')
 
-
 # Check if GPU is available and set the device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -100,7 +99,7 @@ class Agent():
         self.replay_buffer = ReplayMemory(maxlen=self.replay_buffer_size)
 
         # Initialize the environment
-        self.env = gym.make(self.env_id, render_mode='human' if is_training else None)
+        self.env = gym.make(self.env_id, render_mode='human' if not is_training else None)
 
         # Get state and action dimensions from the environment
         self.state_dim = self.env.observation_space.shape[0]
@@ -120,22 +119,14 @@ class Agent():
         self.critic_target_2 = Critic(self.state_dim, self.action_dim).to(device)
         self.critic_target_2.load_state_dict(self.critic_2.state_dict())
 
-        self.replay_buffer
-
-
     def run(self, is_training=True, render=False):
         if is_training:
             start_time = datetime.now()
-            last_graph_update_time = start_time
             log_message = f"{start_time.strftime(DATE_FORMAT)}: Training starting..."
             print(log_message)
             with open(self.LOG_FILE, 'w') as file:
                 file.write(log_message + '\n')
-
-        #//////////////////////////// note to self, upload the model after every highest reward per episode
-
-
-
+                
         # Optimizers
         actor_optimizer = optim.Adam(self.actor.parameters(), lr=0.001)
         critic_optimizer_1 = optim.Adam(self.critic_1.parameters(), lr=0.001)
@@ -148,11 +139,6 @@ class Agent():
             self.critic_1.load_state_dict(checkpoint['critic_1'])
             self.critic_2.load_state_dict(checkpoint['critic_2'])
 
-        rewards_per_episode = []
-        epsilon_history = []
-        last_graph_update_time = datetime.now()
-        best_reward = self.highest_reward
-
         for episode in range(1000):
             state = self.env.reset()[0]
             episode_reward = 0
@@ -163,7 +149,8 @@ class Agent():
                 state_tensor = torch.tensor(state).to(device)
                 
                 # Select action
-                action = self.actor(state_tensor).detach().cpu().numpy()[0]
+                with torch.no_grad():
+                    action = self.actor(state_tensor).detach().cpu().numpy()[0]
                 action = np.clip(action + np.random.normal(0, self.max_action * 0.1, size=self.action_dim), -self.max_action, self.max_action)
                 
                 # Interact with the environment
@@ -223,7 +210,6 @@ class Agent():
                         actor_optimizer.step()
                         
                         # the target networks are then softly updated
-                        # 
                         for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
                         
@@ -232,30 +218,8 @@ class Agent():
                         
                         for param, target_param in zip(self.critic_2.parameters(), self.critic_target_2.parameters()):
                             target_param.data.copy_(self.tau * param.data + (1 - self.tau))
-            #     if done:
-            #         break
-            #     state = next_state
             
             print(f"Episode {episode + 1}, Reward: {episode_reward}")
-
-    def save_model(self, actor, critic_1, critic_2):
-        torch.save({
-            'actor': actor.state_dict(),
-            'critic_1': critic_1.state_dict(),
-            'critic_2': critic_2.state_dict()
-        }, self.MODEL_FILE)
-
-    def save_graph(self, rewards_per_episode, epsilon_history):
-        plt.figure()
-        plt.subplot(2, 1, 1)
-        plt.plot(rewards_per_episode)
-        plt.title('Rewards per Episode')
-        plt.subplot(2, 1, 2)
-        plt.plot(epsilon_history)
-        plt.title('Epsilon History')
-        plt.savefig(self.GRAPH_FILE)
-
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train or test model.')
@@ -266,9 +230,4 @@ if __name__ == '__main__':
     # Initialize agent with specified hyperparameters
     td3 = Agent(hyperparameter_set=args.hyperparameters, is_training=args.train)
     td3.run()
-    # # Training or Testing
-    # if args.train:
-    #     td3.run(is_training=True)
-    # else:
-    #     td3.run(is_training=False, render=True)
 
