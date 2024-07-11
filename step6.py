@@ -49,27 +49,27 @@ class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action, hidden_dim=256):
         super(Actor, self).__init__()
         self.layer1 = nn.Linear(state_dim, hidden_dim)
-        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        #self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, action_dim)
         self.max_action = max_action
 
     def forward(self, state):
         x = torch.relu(self.layer1(state))
-        x = torch.relu(self.layer2(x))
+        #x = torch.relu(self.layer2(x))
         action = self.max_action * torch.tanh(self.layer3(x))  # Ensure the action is in the correct range 
         return action
 
 # Critic NN
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim=246):
+    def __init__(self, state_dim, action_dim, hidden_dim=256):
         super(Critic, self).__init__()
         self.layer1 = nn.Linear(state_dim + action_dim, hidden_dim)
-        self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        #self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, state, action):
         x = torch.relu(self.layer1(torch.cat([state, action], 1)))
-        x = torch.relu(self.layer2(x))
+        #x = torch.relu(self.layer2(x))
         q_value = self.layer3(x)
         return q_value
 
@@ -274,7 +274,7 @@ class Agent():
         # plt.plot(epsilon_history)
         # plt.title('Epsilon History')
         plt.savefig(self.GRAPH_FILE)
-        plt.close
+        plt.close('all')
 
 
 
@@ -287,4 +287,3 @@ if __name__ == '__main__':
     # Initialize agent with specified hyperparameters
     td3 = Agent(hyperparameter_set=args.hyperparameters, is_training=args.train)
     td3.run(is_training=args.train)
-
