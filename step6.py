@@ -185,7 +185,7 @@ class Agent():
                 
                 current_time = datetime.now()
                 if current_time - last_graph_update_time > timedelta(seconds=10):
-                    self.save_graph(self.rewards_per_episode, self.epsilon_history)
+                    self.save_graph(self.rewards_per_episode)
                     last_graph_update_time = current_time
                     
                 if len(self.replay_buffer) > self.mini_batch_size:
@@ -256,13 +256,23 @@ class Agent():
                 for param, target_param in zip(self.critic_2.parameters(), self.critic_target_2.parameters()):
                     target_param.data.copy_(self.tau * param.data + (1 - self.tau) *  target_param.data)
 
-    def save_graph(self, rewards_per_episode, epsilon_history):
-        plt.figure()
-        plt.subplot(2, 1, 1)
-        plt.plot(rewards_per_episode)
-        plt.title('Rewards per Episode')
-        plt.savefig(self.GRAPH_FILE)
-        plt.close('all')
+    def save_graph(self, rewards_per_episode):
+        fig, ax = plt.subplots()
+
+        # Calculate mean rewards
+        mean_rewards = np.zeros(len(rewards_per_episode))
+        for x in range(len(mean_rewards)):
+            mean_rewards[x] = np.mean(rewards_per_episode[max(0, x-99):(x+1)])
+        
+        color = 'tab:blue'
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Mean Rewards', color=color)
+        ax.plot(mean_rewards, color=color)
+        ax.tick_params(axis='y', labelcolor=color)
+
+        fig.tight_layout()  
+        fig.savefig(self.GRAPH_FILE)
+        plt.close(fig)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train or test model.')
