@@ -24,7 +24,7 @@ pendulum1:
   mini_batch_size: 100
   episode_start_reward: 0.0
   env_make_params:
-    g: 7.0
+    g: 9.8
 
 lunarlanding:
   env_id: LunarLander-v2
@@ -53,7 +53,7 @@ bipedalwalker:
   policy_noise: 0.2
   noise_clip: 0.5
   policy_freq: 2
-  stop_on_reward: -1000.0
+  stop_on_reward: 300
   learning_rate: 0.001
   mini_batch_size: 100
   episode_start_reward: 0.0

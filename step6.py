@@ -44,14 +44,22 @@ class ReplayMemory():
     def __len__(self):
         return len(self.memory)
 
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.kaiming_normal_(m.weight)
+        if m.bias is not None:
+            m.bias.data.fill_(0.01)
+
 # Actor NN
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action, hidden_dim=256):
+    def __init__(self, state_dim, action_dim, max_action, hidden_dim=300):
         super(Actor, self).__init__()
         self.layer1 = nn.Linear(state_dim, hidden_dim)
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
         self.layer3 = nn.Linear(hidden_dim, action_dim)
         self.max_action = max_action
+
+        self.apply(init_weights)  # Apply the weight initialization
 
     def forward(self, state):
         x = torch.relu(self.layer1(state))
@@ -59,21 +67,42 @@ class Actor(nn.Module):
         action = self.max_action * torch.tanh(self.layer3(x))  # Ensure the action is in the correct range 
         return action
 
-# Critic NN
+# # Critic NN
+# class Critic(nn.Module):
+#     def __init__(self, state_dim, action_dim, hidden_dim=400):
+#         super(Critic, self).__init__()
+#         self.layer1 = nn.Linear(action_dim + state_dim, int(hidden_dim / 2))
+#         self.layer2 = nn.Linear(action_dim, int(hidden_dim / 2))
+#         self.layer3 = nn.Linear(hidden_dim, hidden_dim)
+#         self.layer4 = nn.Linear(hidden_dim, 1)
+
+#         self.apply(init_weights)  # Apply the weight initialization
+
+#     def forward(self, state, action):
+#         x = torch.cat([state, action], dim=1)
+#         x = torch.relu(self.layer1(torch.cat([state, action], 1)))
+#         x = torch.relu(self.layer2(x))
+#         q_value = self.layer3(x)
+#         return q_value
+
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim=256):
+    def __init__(self, state_dim, action_dim, hidden_dim=200):
         super(Critic, self).__init__()
         self.layer1 = nn.Linear(state_dim + action_dim, hidden_dim)
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
-        self.layer3 = nn.Linear(hidden_dim, action_dim)
+        self.layer3 = nn.Linear(hidden_dim, 1)  # Output a single Q-value
+
+        self.apply(init_weights)  # Apply the weight initialization
 
     def forward(self, state, action):
-        x = torch.relu(self.layer1(torch.cat([state, action], 1)))
-        x = torch.relu(self.layer2(x))
-        q_value = self.layer3(x)
+        # Concatenate state and action tensors along the batch dimension
+        x = torch.cat([state, action], dim=1)  # dim=1 means concatenate along the columns
+        x = torch.relu(self.layer1(x))  # Pass through first layer with ReLU activation
+        x = torch.relu(self.layer2(x))  # Pass through second layer with ReLU activation
+        q_value = self.layer3(x)  # Get the Q-value from the last layer
         return q_value
-
-
+    
+    
 class Agent():
     def __init__(self, hyperparameter_set, is_training):
         with open('hyperparameters.yml', 'r') as file:
@@ -258,21 +287,21 @@ class Agent():
 
     def save_graph(self, rewards_per_episode):
         fig, ax = plt.subplots()
-
         # Calculate mean rewards
         mean_rewards = np.zeros(len(rewards_per_episode))
         for x in range(len(mean_rewards)):
             mean_rewards[x] = np.mean(rewards_per_episode[max(0, x-99):(x+1)])
-        
-        color = 'tab:blue'
+        # Plot rewards per episode
+        ax.plot(rewards_per_episode, label='Rewards per Episode', color='tab:blue')
+        # Plot mean rewards
+        ax.plot(mean_rewards, label='Mean Rewards (100 episodes)', color='tab:orange')
         ax.set_xlabel('Episode')
-        ax.set_ylabel('Mean Rewards', color=color)
-        ax.plot(mean_rewards, color=color)
-        ax.tick_params(axis='y', labelcolor=color)
-
-        fig.tight_layout()  
+        ax.set_ylabel('Rewards')
+        ax.legend(loc='best')
+        fig.tight_layout()
         fig.savefig(self.GRAPH_FILE)
         plt.close(fig)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train or test model.')
