@@ -8,9 +8,9 @@
             "name": "Python Debugger: Current File with Arguments",
             "type": "debugpy",
             "request": "launch",
-            "program": "step4.py",
+            "program": "TD3.py",
             "console": "integratedTerminal",
-            "args": ["mountaincar1"]
+            "args": ["pendulum", "--train"]
         }
     ]
 }
