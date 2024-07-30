@@ -1,17 +1,23 @@
-mountaincar1:
-  env_id: MountainCarContinuous-v0
+bipedalwalker:
+  env_id: BipedalWalker-v3
   replay_buffer_size: 100000
   gamma: 0.99 
   tau: 0.005
   policy_noise: 0.02
   noise_clip: 0.5
-  policy_freq: 5
-  stop_on_reward: -10000.0
+  policy_freq: 2
+  stop_on_reward: 300
   learning_rate: 0.001
   mini_batch_size: 100
   episode_start_reward: 0.0
+  max_episodes: 5000
+  actor_hidden_dim: 400
+  critic_hidden_dim: 300
+  env_make_params:
+    hardcore: False
 
-pendulum1:
+
+pendulum:
   env_id: Pendulum-v1
   replay_buffer_size: 100000
   gamma: 0.99 
@@ -19,43 +25,35 @@ pendulum1:
   policy_noise: 0.02
   noise_clip: 0.5
   policy_freq: 5
-  stop_on_reward: -10000.0
+  stop_on_reward: -0.1
   learning_rate: 0.001
   mini_batch_size: 100
-  episode_start_reward: 0.0
+  episode_start_reward: -1500
+  max_episodes: 2000
+  actor_hidden_dim: 400
+  critic_hidden_dim: 300
   env_make_params:
     g: 9.8
 
+  
 lunarlanding:
   env_id: LunarLander-v2
   replay_buffer_size: 100000
   gamma: 0.99 
   tau: 0.005
-  policy_noise: 0.05
+  policy_noise: 0.02
   noise_clip: 0.5
   policy_freq: 2
-  stop_on_reward: -1000.0
+  stop_on_reward: 200
   learning_rate: 0.001
   mini_batch_size: 100
   episode_start_reward: 0.0
+  max_episodes: 5000
+  actor_hidden_dim: 400
+  critic_hidden_dim: 300
   env_make_params:
     continuous: True
-    gravity: -5.0
+    gravity: -10.0
     enable_wind: False
     wind_power: 5.0
     turbulence_power: 1.0
-
-bipedalwalker:
-  env_id: BipedalWalker-v3
-  replay_buffer_size: 100000
-  gamma: 0.99 
-  tau: 0.005
-  policy_noise: 0.2
-  noise_clip: 0.5
-  policy_freq: 2
-  stop_on_reward: 300
-  learning_rate: 0.001
-  mini_batch_size: 100
-  episode_start_reward: 0.0
-  env_make_params:
-    hardcore: False
