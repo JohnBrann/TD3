@@ -1,6 +1,6 @@
-This is an implementation of the TD3 algorithm that uses simulation environments from Gymnasium by OpenAi.
+This is an implementation of the TD3 algorithm that uses the simulation environments from Gymnasium by OpenAi.
 
-This is one of the training runs on the Bipedal Walker simulation environement. We were able top acheive successful results after 1200 episodes.
+This is one of the training runs on the Bipedal Walker simulation environement. We were able top acheive successful results after roughly 1200 episodes.
 
 ![image](https://github.com/JohnBrann/TD3/blob/main/runs/bipedalwalker.png)
 
