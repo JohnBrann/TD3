@@ -36,6 +36,9 @@ class ReplayMemory():
     def __len__(self):
         return len(self.memory)
 
+# Base Network class providing common functionality
+# To my knowledge this is an added step and not necessary. I think we may be able to inherit directly from nn.Module
+# for future development we should probably expirement
 class Network(nn.Module):
     def __init__(self):
         super(Network, self).__init__()
@@ -63,6 +66,8 @@ class Critic(Network):
     def __init__(self, state_size, action_size, critic_hidden_dim):
         super(Critic, self).__init__()
         # Q1 architecture
+        # We do state_dim + action_dim becuase the critic networks are taking a state action pair and estimating the q value.
+        # We output 1 Q value from the critic
         self.l1 = nn.Linear(state_size + action_size, critic_hidden_dim)
         self.l2 = nn.Linear(critic_hidden_dim, critic_hidden_dim)
         self.l3 = nn.Linear(critic_hidden_dim, 1)
@@ -116,13 +121,15 @@ class TD3Agent:
         RUNS_DIR = 'runs'
         os.makedirs(RUNS_DIR, exist_ok=True)
         self.LOG_FILE = os.path.join(RUNS_DIR, f'{hyperparameter_set}.log')
-        self.MODEL_FILE = os.path.join(RUNS_DIR, f'{hyperparameter_set}.pt')
+        self.ACTOR_MODEL_FILE = os.path.join(RUNS_DIR, f'actor_{hyperparameter_set}.pt')
+        self.CRITIC_MODEL_FILE = os.path.join(RUNS_DIR, f'critic_{hyperparameter_set}.pt')
         self.GRAPH_FILE = os.path.join(RUNS_DIR, f'{hyperparameter_set}.png')
 
         # Added variables
         self.is_training =  is_training
         self.highest_reward = -np.inf
-        self.total_iterations = 0
+        # used in the train method, keeps track of how many updates before a policy update 
+        self.total_updates = 0
         self.replay_buffer = ReplayMemory(maxlen=self.replay_buffer_size)
 
         # Initialize the environment
@@ -137,18 +144,31 @@ class TD3Agent:
         self.rewards_per_episode = []
         self.epsilon_history = []
         self.best_reward = -float('inf')
+        # commonly the same as the truncated value
+        # we could modify this value if desired
         self.max_steps = self.env.spec.max_episode_steps  # Dynamically get the truncation value
+
+        #Initializing the netwroks
+        # We always initialize the main actor network, this is the network we give a state and recieve an action we are performing for that next step
+        # The actor target and critic networks are only used in the training process and not the testing process
+        # if we are testing we will load a previous model and set the weights of that saved model to be the weights of the new actor network
 
         # Initialize Actor Network
         self.actor = Actor(self.state_dim, self.action_dim, self.max_action, self.actor_hidden_dim).to(device)
+        self.critic = Critic(self.state_dim, self.action_dim, self.critic_hidden_dim).to(device)
+
+        self.continue_training = False
 
         if is_training:
+            if self.continue_training:
+                    # load from previous
+                    self.actor.load_state_dict(torch.load(self.ACTOR_MODEL_FILE))
+                    self.critic.load_state_dict(torch.load(self.CRITIC_MODEL_FILE))
             # Initialize Actor Target Network
             self.actor_target = Actor(self.state_dim, self.action_dim, self.max_action, self.actor_hidden_dim).to(device)
             self.actor_target.load_state_dict(self.actor.state_dict())
 
             # Initialize Critic Networks (Critic and Critic Target)
-            self.critic = Critic(self.state_dim, self.action_dim, self.critic_hidden_dim).to(device)
             self.critic_target = Critic(self.state_dim, self.action_dim, self.critic_hidden_dim).to(device)
             self.critic_target.load_state_dict(self.critic.state_dict())
 
@@ -159,31 +179,40 @@ class TD3Agent:
             # Clear log file at the start of each run
             open(self.LOG_FILE, 'w').close()
         else:
-            self.actor.load_state_dict(torch.load(self.MODEL_FILE))
+            self.actor.load_state_dict(torch.load(self.ACTOR_MODEL_FILE))
+            self.critic.load_state_dict(torch.load(self.CRITIC_MODEL_FILE))
             self.actor.eval() 
 
+    # select an action 
+    # we resize the shape top be a tensor within the specified range
+    # we then pass that state into the actor network and recieve action
     def select_action(self, state):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
     
     def run(self):
+        # episode loop
         for episode in range(self.max_episodes):
             state, _ = self.env.reset()
             episode_reward = 0
             step_count = 0
             terminated = False
-
+            # while still in a current episode
             while not terminated and step_count < self.max_steps:
+                # select an action
                 action = self.select_action(state)
                 
+                # if we are training, we are adding noise to the selected action to allow for better exploration, otherwise we jsut want to take the best action from the actor
                 if self.is_training:
                     action = action + np.random.normal(0, self.max_action * 0.1, size=self.action_dim)
                     action = np.clip(action, -self.max_action, self.max_action)
 
+                # we take a step with the selected action and get info in return
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 terminated = terminated or truncated
-
+                
                 if self.is_training:
+                    # notice we append the current state and the next state to the replay buffer
                     self.replay_buffer.append((state, action, next_state, reward, float(terminated)))
                     
                     # Train the agent every few steps, e.g., every 4 steps
@@ -202,7 +231,8 @@ class TD3Agent:
                     print(log_message)
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')
-                    torch.save(self.actor.state_dict(), self.MODEL_FILE)
+                    torch.save(self.actor.state_dict(), self.ACTOR_MODEL_FILE)
+                    torch.save(self.critic.state_dict(), self.CRITIC_MODEL_FILE)
                     self.best_reward = episode_reward
                     self.save_graph(self.rewards_per_episode)
 
@@ -227,6 +257,10 @@ class TD3Agent:
         reward = torch.FloatTensor(np.array(reward)).to(device)
         terminated = torch.FloatTensor(np.array(terminated)).to(device)
 
+        # WHY DO WE USE THE NEXT STATE
+        # We use the next state to update the actor target networks
+        # The target is essentially one step ahead of the actor network and is the goal for the main actor
+
         # Select action according to policy and add clipped noise
         noise = torch.randn_like(action) * self.policy_noise
         noise = noise.clamp(-self.noise_clip, self.noise_clip)
@@ -249,7 +283,7 @@ class TD3Agent:
         self.critic_optimizer.step()
 
         # Delayed policy updates
-        if self.total_iterations % self.policy_freq == 0:
+        if self.total_updates % self.policy_freq == 0:
             # Compute actor loss
             actor_loss = -self.critic(state, self.actor(state))[0].mean()
 
@@ -264,10 +298,41 @@ class TD3Agent:
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-        # Increment the total_iterations counter
-        self.total_iterations += 1
+        # Increment the total_updates counter
+        self.total_updates += 1
 
+    # def save_graph(self, rewards_per_episode):
+    #     # Save plots
+    #     fig, ax1 = plt.subplots()
 
+    #     # Plot average rewards per last 100 episodes , and the cumulative mean over all episodes (Y-axis) vs episodes (X-axis)
+    #     mean_rewards = np.zeros(len(rewards_per_episode))
+    #     for x in range(len(mean_rewards)):
+    #         mean_rewards[x] = np.mean(rewards_per_episode[max(0, x-99):(x+1)])
+
+    #     mean_total = np.zeros(len(rewards_per_episode))
+    #     for x in range(len(mean_total)):
+    #         mean_total[x] = np.mean(rewards_per_episode[0:(x+1)])
+        
+    #     ax1.set_xlabel('Episodes')
+    #     ax1.set_ylabel('Mean Reward Last 100 Episodes', color='tab:blue')
+    #     ax1.plot(mean_rewards, color='tab:blue')
+    #     ax1.tick_params(axis='y', labelcolor='tab:blue')
+
+    #     # Create a second y-axis
+    #     ax2 = ax1.twinx()
+    #     ax2.set_ylabel('Cumulative Mean Reward', color='tab:green')
+    #     ax2.plot(mean_total, color='tab:green', linestyle='--')
+    #     ax2.tick_params(axis='y', labelcolor='tab:green')
+
+    #     # Make y axis 1 and 2 the same scale
+    #     ax1.set_ylim([min(min(mean_rewards), min(mean_total)), max(max(mean_rewards), max(mean_total))])
+    #     ax2.set_ylim(ax1.get_ylim())
+
+    #     # Save the figure
+    #     fig.tight_layout()  # Adjust layout to prevent overlap
+    #     fig.savefig(self.GRAPH_FILE)
+    #     plt.close(fig)
 
     def save_graph(self, rewards_per_episode):
         fig, ax = plt.subplots()
