@@ -10,7 +10,7 @@ bipedalwalker:
   learning_rate: 0.001
   mini_batch_size: 100
   episode_start_reward: 0.0
-  max_episodes: 5000
+  max_episodes: 20000
   actor_hidden_dim: 400
   critic_hidden_dim: 300
   env_make_params:
